@@ -56,7 +56,7 @@ where custaccnum =:bankAcct and bankname =:bankType ]]></snowflake:sql>
 output application/json
 ---
 {
- "status" : "Amount deposit successfully done for the Account Number: "	++ vars.inputPayload.accountNum as String
+ "status" : "  Amount deposit successfully done for the Account Number: "	++ vars.inputPayload.accountNum as String ++ "total balance is :"++ vars.totalAmount as Number
 }]]></ee:set-payload>
 					</ee:message>
 				</ee:transform>
