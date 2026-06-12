@@ -72,6 +72,7 @@ output application/json
 }]]></ee:set-payload>
 							</ee:message>
 						</ee:transform>
+						<logger level="INFO" doc:name="Logger" doc:id="ad8a9aab-148d-4a8d-ba77-c25dca59640a" message="----------------update not done-------------------"/>
 					</otherwise>
 				</choice>
 			</when>
