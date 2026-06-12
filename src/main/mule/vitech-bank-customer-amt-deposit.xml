@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="cea5cd7e-1046-4ccb-9d65-97bc183aeb50" >
+		<http:listener-connection host="0.0.0.0" port="${http.port}" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="0038db7e-c8c7-4086-ba6d-480808b77b09" file="myConfig-dev.yaml" />
+	<snowflake:snowflake-config name="Snowflake_Config" doc:name="Snowflake Config" doc:id="871f7ec1-4d98-4df4-8ca2-b47f66491ae0" >
+		<snowflake:snowflake-connection accountName="${db.sfc.accountname}" warehouse="${db.sfc.warehouse}" database="${db.sfc.database}" schema="${db.sfc.schema}" user="${db.sfc.user}" password="${db.sfc.password}" role="${db.sfc.role}"/>
+	</snowflake:snowflake-config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="890927d5-cf05-48f7-a28f-55aa3a9550f7" >
+		<email:smtp-connection host="${email.config.host}" port="${email.config.port}" user="${email.config.user}" password="${email.config.password}" >
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	<flow name="vitech-bank-customer-amt-depositFlow" doc:id="dd697dbb-b800-4efc-b001-a299b22c1d42" >
+		<http:listener doc:name="Listener" doc:id="49f3397d-2065-4123-a295-fe1152496719" config-ref="HTTP_Listener_config" path="/api/*"/>
+		<logger level="INFO" doc:name="Logger" doc:id="a3fc4e98-21f9-4c93-b6fd-024012bba2bc" message="----------------------amount deposit api started----------------------#[payload]"/>
+		<set-variable value="#[%dw 2.0&#10;var inp= []&#10;output application/json&#10;---&#10;inp &lt;&lt; payload reduce ((item, accumulator) -&gt;  item )]" doc:name="inputPayload" doc:id="3c8a2d4c-bb80-47b3-bd54-9f074add426a" variableName="inputPayload"/>
+		<snowflake:select doc:name="Select" doc:id="e7343812-68ca-4943-8d6a-2da4e9f0a43d" config-ref="Snowflake_Config">
+			<snowflake:sql ><![CDATA[select * from Bank_Transactions where custAccNum =:accnum and bankName =:bank]]></snowflake:sql>
+			<snowflake:input-parameters ><![CDATA[#[{
+	"accnum": payload.accountNum,
+	"bank":payload.bank
+}]]]></snowflake:input-parameters>
+		</snowflake:select>
+		<choice doc:name="Choice" doc:id="b75f127f-19b8-4ba6-a711-ced45a90e107" >
+			<when expression="#[sizeOf(payload) &gt; 0]">
+				<logger level="INFO" doc:name="Record found" doc:id="80fe6994-e3b8-4b73-b7d8-4b6d70d7bb7a" message="-----------------------------record found before deposit amount----------------------------"/>
+				<set-variable value="#[payload.MAILID[0] as String]" doc:name="email" doc:id="12d9c639-c139-4b3e-b900-268fc1b2250a" variableName="email"/>
+				<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;payload.TOTALBALANCE[0] + vars.inputPayload.depositAmount as Number]" doc:name="totalAmount" doc:id="674f1d25-e872-4d62-aea9-c8ba89359c6c" variableName="totalAmount"/>
+				<snowflake:update doc:name="Update" doc:id="98ab59a0-9e6a-490c-9513-165af6e86718" config-ref="Snowflake_Config" >
+					<snowflake:sql ><![CDATA[update bank_transactions 
+    set TOTALBALANCE =:totalAmount 
+where custaccnum =:bankAcct and bankname =:bankType ]]></snowflake:sql>
+					<snowflake:input-parameters ><![CDATA[#[{
+	"totalAmount":payload.TOTALBALANCE[0] + vars.inputPayload.depositAmount as Number,
+	"bankAcct":payload.CUSTACCNUM[0],
+	"bankType":payload.BANKNAME[0]
+}]]]></snowflake:input-parameters>
+				</snowflake:update>
+				<choice doc:name="Choice" doc:id="da2b0c90-3f45-4259-ab66-549c6d15daaa">
+					<when expression="#[sizeOf(payload.affectedRows) &gt; 0]">
+						<flow-ref doc:name="Flow Reference" doc:id="2aae8d6b-9849-422d-bad9-f61ae4784999" name="vitech-bank-customer-amt-deposit-email" />
+						<ee:transform doc:name="Message update success" doc:id="2548790d-1229-4571-b101-4651f017bc45">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+ "status" : "Amount deposit successfully done for the Account Number: "	++ vars.inputPayload.accountNum as String
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Update not happend" doc:id="cec380bb-ff55-4fd5-83e3-cee540b0eead" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+ "status" : "Account is identified but amount deposit is not successfully done for the Account Number: "	++ vars.inputPayload.accountNum as String
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Record not found" doc:id="d469cdfb-4ae3-4813-852b-a94b1215883b" message="---------------------------record not found for the given input-----------------------"/>
+				<ee:transform doc:name="Message Record not found" doc:id="b265b74c-0152-4c8a-ae6d-9253d2fe55a2" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "account number does not exist Enter Valid Details"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+	<sub-flow name="vitech-bank-customer-amt-deposit-email" doc:id="5dfc526a-d187-4d10-9fad-35e0e8882bbf" >
+		<logger level="INFO" doc:name="Before send an Email" doc:id="153dce5b-3136-4e74-b32a-28f233a70641" message="-----------------------Before send an Email------------------------"/>
+		<email:send doc:name="Email Send for deposit amount" doc:id="b1f4f3d2-d1b6-4a26-ba4b-844e65ff6732" config-ref="Email_SMTP" fromAddress="${email.config.user}" subject='#["Amount deposit done for   "++ vars.inputPayload.bank as String  ++"  is done Today!"]'>
+			<email:to-addresses >
+				<email:to-address value="#[vars.email]" />
+			</email:to-addresses>
+			<email:body contentType="text/plain" >
+				<email:content ><![CDATA[#["This is to inform you that your account has been Credited  " ++ vars.inputPayload.depositAmount as Number++"  today and total balance is: "++ vars.totalAmount as Number]]]></email:content>
+			</email:body>
+		</email:send>
+		<logger level="INFO" doc:name="Email sent succesfully" doc:id="8babe5bf-13cc-48ce-89db-ad0500a28ed4" message="--------------------Email sent succesfully---------------------"/>
+	</sub-flow>
+</mule>
