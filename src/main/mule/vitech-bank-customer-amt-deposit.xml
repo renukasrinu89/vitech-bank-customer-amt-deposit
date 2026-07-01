@@ -93,12 +93,51 @@ output application/json
 	</flow>
 	<sub-flow name="vitech-bank-customer-amt-deposit-email" doc:id="5dfc526a-d187-4d10-9fad-35e0e8882bbf" >
 		<logger level="INFO" doc:name="Before send an Email" doc:id="153dce5b-3136-4e74-b32a-28f233a70641" message="-----------------------Before send an Email------------------------"/>
+		<set-variable value='#["This is to inform you that your account has been Credited  " ++ vars.inputPayload.depositAmount as Number++"  today and total balance is: "++ vars.totalAmount as Number]' doc:name="emailBody" doc:id="bb1cfeb3-b5a3-418f-be3e-8e1b705389b6" variableName="emailBody"/>
+		<parse-template doc:name="Parse Template" doc:id="d4e6993e-1d65-4c0b-bfb2-15b5ec302a9f" >
+			<content >&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+	&lt;title&gt;
+		HTML table border Attribute
+	&lt;/title&gt;
+	&lt;style&gt;
+		body {
+			text-align: center;
+		}
+
+		table {
+			margin: 0 auto;
+			height: 20vh;
+			width: 40vh;
+		}
+
+		h1 {
+			color: green;
+		}
+        h5 {
+			color: red;
+		}
+	&lt;/style&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+	&lt;h1&gt;Welcome to VITech Talks&lt;/h1&gt;
+	&lt;h3&gt;#[vars.emailBody]&lt;/h3&gt;
+    
+    &lt;a href=&quot;https://www.youtube.com/@vitechtalks6017&quot; target=&quot;_blank&quot;&gt;Visit VITechTalks!&lt;/a&gt; 
+    &lt;h5&gt;NOTE: This is an automated email please do not reply to this email&lt;/h5&gt;
+	
+&lt;/body&gt;
+
+&lt;/html&gt;</content>
+		</parse-template>
 		<email:send doc:name="Email Send for deposit amount" doc:id="b1f4f3d2-d1b6-4a26-ba4b-844e65ff6732" config-ref="Email_SMTP" fromAddress="${email.config.user}" subject='#["Amount deposit done for   "++ vars.inputPayload.bank as String  ++"  is done Today!"]'>
 			<email:to-addresses >
 				<email:to-address value="#[vars.email]" />
 			</email:to-addresses>
-			<email:body contentType="text/plain" >
-				<email:content ><![CDATA[#["This is to inform you that your account has been Credited  " ++ vars.inputPayload.depositAmount as Number++"  today and total balance is: "++ vars.totalAmount as Number]]]></email:content>
+			<email:body contentType="text/html" encoding="UTF-8">
 			</email:body>
 		</email:send>
 		<logger level="INFO" doc:name="Email sent succesfully" doc:id="8babe5bf-13cc-48ce-89db-ad0500a28ed4" message="--------------------Email sent succesfully---------------------"/>
