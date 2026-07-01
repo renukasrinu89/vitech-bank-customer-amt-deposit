@@ -140,6 +140,6 @@ output application/json
 			<email:body contentType="text/html" encoding="UTF-8">
 			</email:body>
 		</email:send>
-		<logger level="INFO" doc:name="Email sent succesfully" doc:id="8babe5bf-13cc-48ce-89db-ad0500a28ed4" message="--------------------Email sent succesfully---------------------"/>
+		<logger level="INFO" doc:name="Email sent succesfully" doc:id="8babe5bf-13cc-48ce-89db-ad0500a28ed4" message="--------------------Email sent succesfully----------------------------------"/>
 	</sub-flow>
 </mule>
